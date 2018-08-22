@@ -1,8 +1,5 @@
 import os
-os.environ["KERAS_BACKEND"] = "tensorflow"
 import numpy as np
-from tqdm import tqdm
-
 
 from keras.layers import Input
 from keras.models import Model, Sequential
@@ -16,13 +13,12 @@ from keras import backend as K
 from keras import initializers
 from PIL import Image
 from keras.callbacks import LambdaCallback
-
 import wandb
 
+# Find more tricks here: https://github.com/soumith/ganhacks
+
 run = wandb.init()
-
 config = wandb.config
-
 
 # The results are a little better when the dimensionality of the random vector is only 10.
 # The dimensionality has been left at 100 for consistency with other GAN implementations.
@@ -62,7 +58,7 @@ discriminator.add(Dense(256))
 discriminator.add(LeakyReLU(0.2))
 discriminator.add(Dropout(0.3))
 discriminator.add(Dense(1, activation='sigmoid'))
-discriminator.compile(loss='binary_crossentropy', optimizer=adam, metrics=['acc'])
+discriminator.compile(loss='binary_crossentropy', optimizer=adam, metrics=['binary_accuracy'])
 
 # Combined network
 discriminator.trainable = False
@@ -70,18 +66,14 @@ ganInput = Input(shape=(randomDim,))
 x = generator(ganInput)
 ganOutput = discriminator(x)
 gan = Model(inputs=ganInput, outputs=ganOutput)
-gan.compile(loss='binary_crossentropy', optimizer=adam, metrics = ['acc'])
+gan.compile(loss='binary_crossentropy', optimizer=adam, metrics = ['binary_accuracy'])
 
-dLosses = []
-gLosses = []
 iter = 0
-
 # Write out generated MNIST images
 def writeGeneratedImages(epoch, examples=100, dim=(10, 10), figsize=(10, 10)):
     noise = np.random.normal(0, 1, size=[examples, randomDim])
     generatedImages = generator.predict(noise)
     generatedImages = generatedImages.reshape(examples, 28, 28)
-    
     
     for i in range(10):
         img = Image.fromarray((generatedImages[0] + 1.)* (255/2.))
@@ -98,20 +90,20 @@ def saveModels(epoch):
 def log_generator(epoch, logs):
     global iter
     iter += 1
-    if iter % 50 == 0:
-        run.history.add({'generator_loss': logs['loss'],
-                     'generator_acc': logs['acc'],
+    if iter % 500 == 0:
+        wandb.log({'generator_loss': logs['loss'],
+                     'generator_acc': logs['binary_accuracy'],
                      'discriminator_loss': 0.0,
-                     'discriminator_acc': (1-logs['acc'])})
+                     'discriminator_acc': (1-logs['binary_accuracy'])})
 
 def log_discriminator(epoch, logs):
     global iter
-    if iter% 50 == 25:
-        run.history.add({
+    if iter % 500 == 250:
+        wandb.log({
             'generator_loss': 0.0,
-            'generator_acc': (logs['acc']),
+            'generator_acc': logs['binary_accuracy'],
             'discriminator_loss': logs['loss'],
-            'discriminator_acc': logs['acc']})
+            'discriminator_acc': logs['binary_accuracy']})
 
 def train(epochs=config.epochs, batchSize=config.batch_size):
     batchCount = int(X_train.shape[0] / config.batch_size)
@@ -124,7 +116,7 @@ def train(epochs=config.epochs, batchSize=config.batch_size):
 
 
     for e in range(1, epochs+1):
-        
+        print("Epoch {}:".format(e))
         for i in range(batchCount):
             # Get a random set of input noise and images
             noise = np.random.normal(0, 1, size=[batchSize, randomDim])
@@ -142,23 +134,18 @@ def train(epochs=config.epochs, batchSize=config.batch_size):
 
             # Train discriminator
             discriminator.trainable = True
-            dloss = discriminator.fit(X, yDis, callbacks = [wandb_logging_callback_d])
+            dloss = discriminator.fit(X, yDis, verbose=0, callbacks=[wandb_logging_callback_d])
 
             # Train generator
             noise = np.random.normal(0, 1, size=[batchSize, randomDim])
             yGen = np.ones(batchSize)
             discriminator.trainable = False
-            gloss = gan.fit(noise, yGen, callbacks = [wandb_logging_callback_g])
+            gloss = gan.fit(noise, yGen, verbose=0, callbacks=[wandb_logging_callback_g])
 
             writeGeneratedImages(i)
 
-        # Store loss of most recent batch from this epoch
-        dLosses.append(dloss)
-        gLosses.append(gloss)
-
-
-        
-
+        print("Discriminator loss: {}, acc: {}".format(dloss.history["loss"][-1], dloss.history["binary_accuracy"][-1]))
+        print("Generator loss: {}, acc: {}".format(gloss.history["loss"][-1], 1-gloss.history["binary_accuracy"][-1]))
 
 
 if __name__ == '__main__':

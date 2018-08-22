@@ -1,4 +1,4 @@
 [default]
-entity: lukeab-m27
-project: fashion
+entity: qualcomm
+project: fashion-aug22
 base_url: https://api.wandb.ai
