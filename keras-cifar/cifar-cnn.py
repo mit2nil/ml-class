@@ -12,14 +12,10 @@ from wandb.keras import WandbCallback
 
 run = wandb.init()
 config = run.config
-config.dropout = 0.25
-config.dense_layer_nodes = 100
-config.learn_rate = 0.01
-config.batch_size = 32
-config.epochs = 50
+config.batch_size = 20
+config.epochs = 45
 
-class_names = ['airplane','automobile','bird','cat','deer',
-               'dog','frog','horse','ship','truck']
+class_names = ['airplane','automobile','bird','cat','deer','dog','frog','horse','ship','truck']
 num_classes = len(class_names)
 
 (X_train, y_train), (X_test, y_test) = cifar10.load_data()
@@ -29,22 +25,20 @@ y_train = keras.utils.to_categorical(y_train, num_classes)
 y_test = keras.utils.to_categorical(y_test, num_classes)
 
 model = Sequential()
-model.add(Conv2D(32, (3, 3), padding='same',
-                 input_shape=X_train.shape[1:], activation='relu'))
+model.add(Conv2D(28, (4, 4), padding='same',input_shape=X_train.shape[1:], activation='relu'))
+model.add(Conv2D(32, (4, 4), padding='same',input_shape=X_train.shape[1:], activation='relu'))
 model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Dropout(config.dropout))
+model.add(Dropout(0.40))
 
 model.add(Flatten())
-model.add(Dense(config.dense_layer_nodes, activation='relu'))
-model.add(Dropout(config.dropout))
+model.add(Dense(200, activation='relu'))
+model.add(Dropout(0.40))
 model.add(Dense(num_classes, activation='softmax'))
 
-opt = keras.optimizers.SGD(lr=config.learn_rate)
+opt = keras.optimizers.SGD(lr=0.01)
 
 # Let's train the model using RMSprop
-model.compile(loss='categorical_crossentropy',
-              optimizer=opt,
-              metrics=['accuracy'])
+model.compile(loss='categorical_crossentropy',optimizer=opt,metrics=['accuracy'])
 
 X_train = X_train.astype('float32') / 255.
 X_test = X_test.astype('float32') / 255.
